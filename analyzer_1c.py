@@ -52,15 +52,27 @@ if __name__ == "__main__":
     total = df_dock_mgmt['Quality'].sum()
     print(total)
 
-    deficient_element = 'Quality'
-    df_perf_type_doc_mgmt = df_dock_mgmt[df_dock_mgmt[deficient_element] == 1]
+    deficient_element = 'Production'
+
+    """ Break multiple Final Decisions into its own (hot encode) """
+    df_split_final_dec = \
+        df_dock_mgmt['Final Decisions'].str.split('\s*•\s*', expand=True).stack().str.get_dummies().sum(level=0)
+    df_final_dec_mgmt = pd.concat([df_dock_mgmt, df_split_final_dec], axis=1)
+    print(df_final_dec_mgmt.head(100))
+
+    df_final_dec_mgmt = df_final_dec_mgmt[df_final_dec_mgmt['Safety Zone Notice'] == 1]
+    print(df_final_dec_mgmt.head(100))
+
+    df_perf_type_doc_mgmt = df_final_dec_mgmt[df_final_dec_mgmt[deficient_element] == 1]
 
     """ Size of the case type filtered data """
     print(df_perf_type_doc_mgmt['Case Type'].count())
+    """ Print filtered results """
+    print(df_perf_type_doc_mgmt)
 
     """ 
     at this point we have case type that are either performance or performance mgmt) and deficient element being 
-    what is specified in deficient_element variable
+    specified in deficient_element variable
     """
 
     """ convert dates to proper format """
@@ -94,8 +106,8 @@ if __name__ == "__main__":
     print(df_perf_type_doc_mgmt_counts.head(10))
     # print(type(df_perf_type_doc_mgmt_counts))
 
-    """ get a list of employees with more than 1 violation """
-    df_offending_employee = df_perf_type_doc_mgmt_counts[df_perf_type_doc_mgmt_counts['count'] > 1]
+    """ get a list of employees with more than 0 violation """
+    df_offending_employee = df_perf_type_doc_mgmt_counts[df_perf_type_doc_mgmt_counts['count'] > 0]
 
     """ sample it """
     print(df_offending_employee.head())
@@ -109,33 +121,41 @@ if __name__ == "__main__":
     print(df_full_record_offending_employee.head())
 
     def date_compare(df_in):
+        print(df_in.head)
         for index, row in df_in.iterrows():
             print('Employee Identifier: ' + str(row['Employee Identifier']))
             end_date_first_case = row.end_first_case
             print('End date of first case: ' + str(end_date_first_case))
-            margin = datetime.timedelta(days=154)
+            margin = datetime.timedelta(days=1825)
 
+            offender = False
             for index2, row2 in df_in.iterrows():
                 if end_date_first_case == row2.end_first_case:
                     continue
                 start_date_second_case = row2['Date Received_DT']
                 print('Start date of second case: ' + str(start_date_second_case))
-                print('Within 154 calendar days? ' + str(
+                print('Within 1825 calendar days? ' + str(
                     end_date_first_case <= start_date_second_case <= end_date_first_case + margin))
                 if end_date_first_case <= start_date_second_case <= end_date_first_case + margin:
-                    with open("output/results" + time_str + ".csv", "a", newline='') as r_file:
-                        rlts = csv.writer(r_file)
-                        rlts.writerow([str(row['Employee Identifier']), str(end_date_first_case),
-                                       row['Final Decisions'], str(start_date_second_case), row2['Final Decisions']])
+                    offender = True
+
+            if not offender:
+                with open("output/results" + time_str + ".csv", "a", newline='') as r_file:
+                    rlts = csv.writer(r_file)
+                    rlts.writerow([str(row['Employee Identifier']), str(end_date_first_case), row['Final Decisions']])
+
         return
 
     time_str = time.strftime("%Y%m%d-%H%M%S")
     with open("output/results" + time_str + ".csv", "a", newline='') as results_file:
         results = csv.writer(results_file)
-        results.writerow(['Employee Identifier', 'End of first case', 'Final Decision of first case',
-                          'Start of second case', 'Final Decision of second case'])
+        results.writerow(['Employee Identifier', 'End of first case', 'Final Decision of first case'])
 
     """ find offending employees and their violations in a csv file """
     df_full_record_offending_employee.groupby('Employee Identifier').apply(date_compare)
 
     clean_from_duplicates("output/results" + time_str, "csv")
+
+
+
+
